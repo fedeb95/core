@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.6.8;
-pragma experimental ABIEncoderV2;
+pragma solidity 0.8.0;
 
-import {SafeMath} from "@openzeppelin/contracts/math/SafeMath.sol";
-import {IERC721} from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import {Decimal} from "./Decimal.sol";
-import {Media} from "./Media.sol";
-import {IMarket} from "./interfaces/IMarket.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "./Decimal.sol";
+import "./interfaces/IMarket.sol";
 
 /**
  * @title A Market for pieces of media
@@ -30,13 +28,13 @@ contract Market is IMarket {
     address private _owner;
 
     // Mapping from token to mapping from bidder to bid
-    mapping(uint256 => mapping(address => Bid)) private _tokenBidders;
+    mapping(address => mapping(uint256 => mapping(address => Bid))) private _tokenBidders;
 
     // Mapping from token to the bid shares for the token
     mapping(uint256 => BidShares) private _bidShares;
 
     // Mapping from token to the current ask for the token
-    mapping(uint256 => Ask) private _tokenAsks;
+    mapping(address => mapping(uint256 => Ask)) private _tokenAsks;
 
     /* *********
      * Modifiers
@@ -55,22 +53,22 @@ contract Market is IMarket {
      * View Functions
      * ****************
      */
-    function bidForTokenBidder(uint256 tokenId, address bidder)
+    function bidForTokenBidder(address contractAddress, uint256 tokenId, address bidder)
         external
         view
         override
         returns (Bid memory)
     {
-        return _tokenBidders[tokenId][bidder];
+        return _tokenBidders[contractAddress][tokenId][bidder];
     }
 
-    function currentAskForToken(uint256 tokenId)
+    function currentAskForToken(address contractAddress, uint256 tokenId)
         external
         view
         override
         returns (Ask memory)
     {
-        return _tokenAsks[tokenId];
+        return _tokenAsks[contractAddress][tokenId];
     }
 
     function bidSharesForToken(uint256 tokenId)
@@ -88,23 +86,28 @@ contract Market is IMarket {
      *  the splitShare function uses integer division, any inconsistencies with the original and split sums would be due to
      *  a bid splitting that does not perfectly divide the bid amount.
      */
-    function isValidBid(uint256 tokenId, uint256 bidAmount)
+    function isValidBid(address contractAddress, uint256 tokenId, uint256 bidAmount)
         public
         view
         override
         returns (bool)
     {
+        // TODO replace with royalties!
+/*
         BidShares memory bidShares = bidSharesForToken(tokenId);
         require(
             isValidBidShares(bidShares),
             "Market: Invalid bid shares for token"
         );
-        return
+*/
+        return true;
+/*
             bidAmount != 0 &&
             (bidAmount ==
                 splitShare(bidShares.creator, bidAmount)
                     .add(splitShare(bidShares.prevOwner, bidAmount))
                     .add(splitShare(bidShares.owner, bidAmount)));
+*/
     }
 
     /**
@@ -173,33 +176,32 @@ contract Market is IMarket {
             "Market: Invalid bid shares, must sum to 100"
         );
         _bidShares[tokenId] = bidShares;
-        emit BidShareUpdated(tokenId, bidShares);
+        //emit BidShareUpdated(tokenId, bidShares);
     }
 
     /**
      * @notice Sets the ask on a particular media. If the ask cannot be evenly split into the media's
      * bid shares, this reverts.
      */
-    function setAsk(uint256 tokenId, Ask memory ask)
+    function setAsk(address contractAddress, uint256 tokenId, Ask memory ask)
         public
         override
-        onlyMediaCaller
     {
         require(
-            isValidBid(tokenId, ask.amount),
+            isValidBid(contractAddress, tokenId, ask.amount),
             "Market: Ask invalid for share splitting"
         );
 
-        _tokenAsks[tokenId] = ask;
-        emit AskCreated(tokenId, ask);
+        _tokenAsks[contractAddress][tokenId] = ask;
+        emit AskCreated(contractAddress, tokenId, ask);
     }
 
     /**
      * @notice removes an ask for a token and emits an AskRemoved event
      */
-    function removeAsk(uint256 tokenId) external override onlyMediaCaller {
-        emit AskRemoved(tokenId, _tokenAsks[tokenId]);
-        delete _tokenAsks[tokenId];
+    function removeAsk(address contractAddress, uint256 tokenId) external override onlyMediaCaller {
+        emit AskRemoved(contractAddress, tokenId, _tokenAsks[contractAddress][tokenId]);
+        delete _tokenAsks[contractAddress][tokenId];
     }
 
     /**
@@ -208,6 +210,7 @@ contract Market is IMarket {
      * If another bid already exists for the bidder, it is refunded.
      */
     function setBid(
+        address contractAddress,
         uint256 tokenId,
         Bid memory bid,
         address spender
@@ -229,11 +232,11 @@ contract Market is IMarket {
             "Market: bid recipient cannot be 0 address"
         );
 
-        Bid storage existingBid = _tokenBidders[tokenId][bid.bidder];
+        Bid storage existingBid = _tokenBidders[contractAddress][tokenId][bid.bidder];
 
         // If there is an existing bid, refund it before continuing
         if (existingBid.amount > 0) {
-            removeBid(tokenId, bid.bidder);
+            removeBid(contractAddress, tokenId, bid.bidder);
         }
 
         IERC20 token = IERC20(bid.currency);
@@ -244,7 +247,7 @@ contract Market is IMarket {
         uint256 beforeBalance = token.balanceOf(address(this));
         token.safeTransferFrom(spender, address(this), bid.amount);
         uint256 afterBalance = token.balanceOf(address(this));
-        _tokenBidders[tokenId][bid.bidder] = Bid(
+        _tokenBidders[contractAddress][tokenId][bid.bidder] = Bid(
             afterBalance.sub(beforeBalance),
             bid.currency,
             bid.bidder,
@@ -256,12 +259,12 @@ contract Market is IMarket {
         // If a bid meets the criteria for an ask, automatically accept the bid.
         // If no ask is set or the bid does not meet the requirements, ignore.
         if (
-            _tokenAsks[tokenId].currency != address(0) &&
-            bid.currency == _tokenAsks[tokenId].currency &&
-            bid.amount >= _tokenAsks[tokenId].amount
+            _tokenAsks[contractAddress][tokenId].currency != address(0) &&
+            bid.currency == _tokenAsks[contractAddress][tokenId].currency &&
+            bid.amount >= _tokenAsks[contractAddress][tokenId].amount
         ) {
             // Finalize exchange
-            _finalizeNFTTransfer(tokenId, bid.bidder);
+            _finalizeNFTTransfer(contractAddress, tokenId, bid.bidder);
         }
     }
 
@@ -269,12 +272,12 @@ contract Market is IMarket {
      * @notice Removes the bid on a particular media for a bidder. The bid amount
      * is transferred from this contract to the bidder, if they have a bid placed.
      */
-    function removeBid(uint256 tokenId, address bidder)
+    function removeBid(address contractAddress, uint256 tokenId, address bidder)
         public
         override
         onlyMediaCaller
     {
-        Bid storage bid = _tokenBidders[tokenId][bidder];
+        Bid storage bid = _tokenBidders[contractAddress][tokenId][bidder];
         uint256 bidAmount = bid.amount;
         address bidCurrency = bid.currency;
 
@@ -283,7 +286,7 @@ contract Market is IMarket {
         IERC20 token = IERC20(bidCurrency);
 
         emit BidRemoved(tokenId, bid);
-        delete _tokenBidders[tokenId][bidder];
+        delete _tokenBidders[contractAddress][tokenId][bidder];
         token.safeTransfer(bidder, bidAmount);
     }
 
@@ -296,12 +299,11 @@ contract Market is IMarket {
      * This should only revert in rare instances (example, a low bid with a zero-decimal token),
      * but is necessary to ensure fairness to all shareholders.
      */
-    function acceptBid(uint256 tokenId, Bid calldata expectedBid)
+    function acceptBid(address contractAddress, uint256 tokenId, Bid calldata expectedBid)
         external
         override
-        onlyMediaCaller
     {
-        Bid memory bid = _tokenBidders[tokenId][expectedBid.bidder];
+        Bid memory bid = _tokenBidders[contractAddress][tokenId][expectedBid.bidder];
         require(bid.amount > 0, "Market: cannot accept bid of 0");
         require(
             bid.amount == expectedBid.amount &&
@@ -311,11 +313,11 @@ contract Market is IMarket {
             "Market: Unexpected bid found."
         );
         require(
-            isValidBid(tokenId, bid.amount),
+            isValidBid(contractAddress, tokenId, bid.amount),
             "Market: Bid invalid for share splitting"
         );
 
-        _finalizeNFTTransfer(tokenId, bid.bidder);
+        _finalizeNFTTransfer(contractAddress, tokenId, bid.bidder);
     }
 
     /**
@@ -323,46 +325,34 @@ contract Market is IMarket {
      * the bid to the shareholders. It also transfers the ownership of the media
      * to the bid recipient. Finally, it removes the accepted bid and the current ask.
      */
-    function _finalizeNFTTransfer(uint256 tokenId, address bidder) private {
-        Bid memory bid = _tokenBidders[tokenId][bidder];
-        BidShares storage bidShares = _bidShares[tokenId];
+    function _finalizeNFTTransfer(address contractAddress, uint256 tokenId, address bidder) private {
+        Bid memory bid = _tokenBidders[contractAddress][tokenId][bidder];
+        // TODO replace with call to RoyaltyLedger BidShares storage bidShares = _bidShares[contractAddress][tokenId];
 
         IERC20 token = IERC20(bid.currency);
 
         // Transfer bid share to owner of media
         token.safeTransfer(
-            IERC721(mediaContract).ownerOf(tokenId),
-            splitShare(bidShares.owner, bid.amount)
+            IERC721(contractAddress).ownerOf(tokenId),
+            bid.amount // TODO replace with roylaties calc splitShare(bidShares.owner, bid.amount)
         );
+
+        // TODO change with royalties, Media creator with owner of contract
         // Transfer bid share to creator of media
-        token.safeTransfer(
-            Media(mediaContract).tokenCreators(tokenId),
-            splitShare(bidShares.creator, bid.amount)
-        );
-        // Transfer bid share to previous owner of media (if applicable)
-        token.safeTransfer(
-            Media(mediaContract).previousTokenOwners(tokenId),
-            splitShare(bidShares.prevOwner, bid.amount)
-        );
+        //token.safeTransfer(
+        //    Media(mediaContract).tokenCreators(tokenId),
+        //    splitShare(bidShares.creator, bid.amount)
+        // );
 
         // Transfer media to bid recipient
-        Media(mediaContract).auctionTransfer(tokenId, bid.recipient);
-
-        // Calculate the bid share for the new owner,
-        // equal to 100 - creatorShare - sellOnShare
-        bidShares.owner = Decimal.D256(
-            uint256(100)
-                .mul(Decimal.BASE)
-                .sub(_bidShares[tokenId].creator.value)
-                .sub(bid.sellOnShare.value)
-        );
-        // Set the previous owner share to the accepted bid's sell-on fee
-        bidShares.prevOwner = bid.sellOnShare;
+        IERC721 nftContract = IERC721(contractAddress);
+        //previousTokenOwners[tokenId] = nftContract.ownerOf(tokenId);
+        nftContract.safeTransferFrom(nftContract.ownerOf(tokenId), bid.recipient, tokenId);
 
         // Remove the accepted bid
-        delete _tokenBidders[tokenId][bidder];
+        delete _tokenBidders[contractAddress][tokenId][bidder];
 
-        emit BidShareUpdated(tokenId, bidShares);
-        emit BidFinalized(tokenId, bid);
+        //emit BidShareUpdated(tokenId, bidShares);
+        emit BidFinalized(contractAddress, tokenId, bid);
     }
 }

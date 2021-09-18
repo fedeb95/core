@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.6.8;
-pragma experimental ABIEncoderV2;
+pragma solidity 0.8.0;
 
-import {Decimal} from "../Decimal.sol";
+import "../Decimal.sol";
 
 /**
  * @title Interface for Zora Protocol's Market
@@ -40,17 +39,16 @@ interface IMarket {
 
     event BidCreated(uint256 indexed tokenId, Bid bid);
     event BidRemoved(uint256 indexed tokenId, Bid bid);
-    event BidFinalized(uint256 indexed tokenId, Bid bid);
-    event AskCreated(uint256 indexed tokenId, Ask ask);
-    event AskRemoved(uint256 indexed tokenId, Ask ask);
-    event BidShareUpdated(uint256 indexed tokenId, BidShares bidShares);
+    event BidFinalized(address indexed contractAddress, uint256 indexed tokenId, Bid bid);
+    event AskCreated(address indexed contractAddress, uint256 indexed tokenId, Ask ask);
+    event AskRemoved(address indexed contractAddress, uint256 indexed tokenId, Ask ask);
 
-    function bidForTokenBidder(uint256 tokenId, address bidder)
+    function bidForTokenBidder(address contractAddress, uint256 tokenId, address bidder)
         external
         view
         returns (Bid memory);
 
-    function currentAskForToken(uint256 tokenId)
+    function currentAskForToken(address contractAddress, uint256 tokenId)
         external
         view
         returns (Ask memory);
@@ -60,7 +58,7 @@ interface IMarket {
         view
         returns (BidShares memory);
 
-    function isValidBid(uint256 tokenId, uint256 bidAmount)
+    function isValidBid(address contractAddress, uint256 tokenId, uint256 bidAmount)
         external
         view
         returns (bool);
@@ -80,17 +78,18 @@ interface IMarket {
     function setBidShares(uint256 tokenId, BidShares calldata bidShares)
         external;
 
-    function setAsk(uint256 tokenId, Ask calldata ask) external;
+    function setAsk(address contractAddress, uint256 tokenId, Ask calldata ask) external;
 
-    function removeAsk(uint256 tokenId) external;
+    function removeAsk(address contractAddress, uint256 tokenId) external;
 
     function setBid(
+        address contractAddress,
         uint256 tokenId,
         Bid calldata bid,
         address spender
     ) external;
 
-    function removeBid(uint256 tokenId, address bidder) external;
+    function removeBid(address contractAddress, uint256 tokenId, address bidder) external;
 
-    function acceptBid(uint256 tokenId, Bid calldata expectedBid) external;
+    function acceptBid(address contractAddress, uint256 tokenId, Bid calldata expectedBid) external;
 }

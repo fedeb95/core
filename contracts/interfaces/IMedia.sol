@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity 0.6.8;
-pragma experimental ABIEncoderV2;
+pragma solidity 0.8.0;
 
-import {IMarket} from "./IMarket.sol";
+import "./IMarket.sol";
 
 /**
  * @title Interface for Zora Protocol's Media
