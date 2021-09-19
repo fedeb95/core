@@ -37,8 +37,8 @@ interface IMarket {
         Decimal.D256 owner;
     }
 
-    event BidCreated(uint256 indexed tokenId, Bid bid);
-    event BidRemoved(uint256 indexed tokenId, Bid bid);
+    event BidCreated(address indexed contractAddress, uint256 indexed tokenId, Bid bid);
+    event BidRemoved(address indexed contractAddress, uint256 indexed tokenId, Bid bid);
     event BidFinalized(address indexed contractAddress, uint256 indexed tokenId, Bid bid);
     event AskCreated(address indexed contractAddress, uint256 indexed tokenId, Ask ask);
     event AskRemoved(address indexed contractAddress, uint256 indexed tokenId, Ask ask);

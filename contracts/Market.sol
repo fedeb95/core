@@ -215,12 +215,14 @@ contract Market is IMarket {
         Bid memory bid,
         address spender
     ) public override onlyMediaCaller {
-        BidShares memory bidShares = _bidShares[tokenId];
-        require(
+        //BidShares memory bidShares = _bidShares[tokenId];
+        // TODO replace with valid royalty split according to ledger
+        /*require(
             bidShares.creator.value.add(bid.sellOnShare.value) <=
                 uint256(100).mul(Decimal.BASE),
             "Market: Sell on fee invalid for share splitting"
         );
+        */
         require(bid.bidder != address(0), "Market: bidder cannot be 0 address");
         require(bid.amount != 0, "Market: cannot bid amount of 0");
         require(
@@ -254,7 +256,7 @@ contract Market is IMarket {
             bid.recipient,
             bid.sellOnShare
         );
-        emit BidCreated(tokenId, bid);
+        emit BidCreated(contractAddress, tokenId, bid);
 
         // If a bid meets the criteria for an ask, automatically accept the bid.
         // If no ask is set or the bid does not meet the requirements, ignore.
@@ -285,7 +287,7 @@ contract Market is IMarket {
 
         IERC20 token = IERC20(bidCurrency);
 
-        emit BidRemoved(tokenId, bid);
+        emit BidRemoved(contractAddress, tokenId, bid);
         delete _tokenBidders[contractAddress][tokenId][bidder];
         token.safeTransfer(bidder, bidAmount);
     }
