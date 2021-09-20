@@ -19,8 +19,6 @@ contract Market is IMarket {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
-    address private _owner;
-
     mapping(address => bool) registeredContracts;
 
     // Mapping from token to mapping from bidder to bid
@@ -110,10 +108,6 @@ contract Market is IMarket {
      * Public Functions
      * ****************
      */
-
-    constructor() {
-        _owner = msg.sender;
-    }
 
     /**
      * @notice registers a contract in this market. Allows all other function calls
