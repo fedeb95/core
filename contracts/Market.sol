@@ -15,11 +15,11 @@ import "./interfaces/IMarket.sol";
  * @title A Market for pieces of media
  * @notice This contract contains all of the market logic for Media
  */
-contract Market is IMarket {
+contract Market is IMarket, Ownable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
-    address private _owner;
+    address _tokenVault;
 
     mapping(address => bool) registeredContracts;
 
@@ -110,9 +110,13 @@ contract Market is IMarket {
      * Public Functions
      * ****************
      */
-
-    constructor() {
-        _owner = msg.sender;
+    function transferOwnership(address newOwner) public virtual onlyOwner override{
+        require(newOwner != address(0));
+        Ownable vault = Ownable(_tokenVault);
+        vault.transferOwnership(newOwner);
+        address oldOwner = _owner;
+        _owner = newOwner;
+        emit OwnershipTransferred(oldOwner, newOwner);
     }
 
     /**
