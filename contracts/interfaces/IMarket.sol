@@ -28,20 +28,13 @@ interface IMarket {
         address currency;
     }
 
-    struct BidShares {
-        // % of sale value that goes to the _previous_ owner of the nft
-        Decimal.D256 prevOwner;
-        // % of sale value that goes to the original creator of the nft
-        Decimal.D256 creator;
-        // % of sale value that goes to the seller (current owner) of the nft
-        Decimal.D256 owner;
-    }
-
     event BidCreated(address indexed contractAddress, uint256 indexed tokenId, Bid bid);
     event BidRemoved(address indexed contractAddress, uint256 indexed tokenId, Bid bid);
     event BidFinalized(address indexed contractAddress, uint256 indexed tokenId, Bid bid);
     event AskCreated(address indexed contractAddress, uint256 indexed tokenId, Ask ask);
     event AskRemoved(address indexed contractAddress, uint256 indexed tokenId, Ask ask);
+
+    function register(address contractAddress) external;
 
     function bidForTokenBidder(address contractAddress, uint256 tokenId, address bidder)
         external
@@ -53,30 +46,10 @@ interface IMarket {
         view
         returns (Ask memory);
 
-    function bidSharesForToken(uint256 tokenId)
-        external
-        view
-        returns (BidShares memory);
-
     function isValidBid(address contractAddress, uint256 tokenId, uint256 bidAmount)
         external
         view
         returns (bool);
-
-    function isValidBidShares(BidShares calldata bidShares)
-        external
-        pure
-        returns (bool);
-
-    function splitShare(Decimal.D256 calldata sharePercentage, uint256 amount)
-        external
-        pure
-        returns (uint256);
-
-    function configure(address mediaContractAddress) external;
-
-    function setBidShares(uint256 tokenId, BidShares calldata bidShares)
-        external;
 
     function setAsk(address contractAddress, uint256 tokenId, Ask calldata ask) external;
 

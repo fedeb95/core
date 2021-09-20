@@ -4,7 +4,9 @@ pragma solidity 0.8.0;
 
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./Decimal.sol";
 import "./interfaces/IMarket.sol";
@@ -17,21 +19,12 @@ contract Market is IMarket {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
-    /* *******
-     * Globals
-     * *******
-     */
-    // Address of the media contract that can call this market
-    address public mediaContract;
-
-    // Deployment Address
     address private _owner;
+
+    mapping(address => bool) registeredContracts;
 
     // Mapping from token to mapping from bidder to bid
     mapping(address => mapping(uint256 => mapping(address => Bid))) private _tokenBidders;
-
-    // Mapping from token to the bid shares for the token
-    mapping(uint256 => BidShares) private _bidShares;
 
     // Mapping from token to the current ask for the token
     mapping(address => mapping(uint256 => Ask)) private _tokenAsks;
@@ -41,11 +34,20 @@ contract Market is IMarket {
      * *********
      */
 
-    /**
-     * @notice require that the msg.sender is the configured media contract
-     */
-    modifier onlyMediaCaller() {
-        require(mediaContract == msg.sender, "Market: Only media contract");
+    modifier onlyRegistered(address contractAddress){
+        require(registeredContracts[contractAddress], "Contract not registered!");
+        _;
+    }
+
+    modifier ownsContract(address contractAddress){
+        Ownable ownableContract = Ownable(contractAddress);
+        require(ownableContract.owner() == msg.sender, "Sender must own contract!");
+        _;
+    }
+
+    modifier ownsToken(address contractAddress, uint256 tokenId){
+        IERC721 nftContract = IERC721(contractAddress);
+        require(msg.sender == nftContract.ownerOf(tokenId), "Sender doesn't own token!");
         _;
     }
 
@@ -57,6 +59,7 @@ contract Market is IMarket {
         external
         view
         override
+        onlyRegistered(contractAddress)
         returns (Bid memory)
     {
         return _tokenBidders[contractAddress][tokenId][bidder];
@@ -66,18 +69,10 @@ contract Market is IMarket {
         external
         view
         override
+        onlyRegistered(contractAddress)
         returns (Ask memory)
     {
         return _tokenAsks[contractAddress][tokenId];
-    }
-
-    function bidSharesForToken(uint256 tokenId)
-        public
-        view
-        override
-        returns (BidShares memory)
-    {
-        return _bidShares[tokenId];
     }
 
     /**
@@ -90,6 +85,7 @@ contract Market is IMarket {
         public
         view
         override
+        onlyRegistered(contractAddress)
         returns (bool)
     {
         // TODO replace with royalties!
@@ -110,73 +106,24 @@ contract Market is IMarket {
 */
     }
 
-    /**
-     * @notice Validates that the provided bid shares sum to 100
-     */
-    function isValidBidShares(BidShares memory bidShares)
-        public
-        pure
-        override
-        returns (bool)
-    {
-        return
-            bidShares.creator.value.add(bidShares.owner.value).add(
-                bidShares.prevOwner.value
-            ) == uint256(100).mul(Decimal.BASE);
-    }
-
-    /**
-     * @notice return a % of the specified amount. This function is used to split a bid into shares
-     * for a media's shareholders.
-     */
-    function splitShare(Decimal.D256 memory sharePercentage, uint256 amount)
-        public
-        pure
-        override
-        returns (uint256)
-    {
-        return Decimal.mul(amount, sharePercentage).div(100);
-    }
-
     /* ****************
      * Public Functions
      * ****************
      */
 
-    constructor() public {
+    constructor() {
         _owner = msg.sender;
     }
 
     /**
-     * @notice Sets the media contract address. This address is the only permitted address that
-     * can call the mutable functions. This method can only be called once.
+     * @notice registers a contract in this market. Allows all other function calls
      */
-    function configure(address mediaContractAddress) external override {
-        require(msg.sender == _owner, "Market: Only owner");
-        require(mediaContract == address(0), "Market: Already configured");
-        require(
-            mediaContractAddress != address(0),
-            "Market: cannot set media contract as zero address"
-        );
-
-        mediaContract = mediaContractAddress;
-    }
-
-    /**
-     * @notice Sets bid shares for a particular tokenId. These bid shares must
-     * sum to 100.
-     */
-    function setBidShares(uint256 tokenId, BidShares memory bidShares)
-        public
-        override
-        onlyMediaCaller
+    function register(address contractAddress) 
+        external 
+        override 
+        ownsContract(contractAddress)
     {
-        require(
-            isValidBidShares(bidShares),
-            "Market: Invalid bid shares, must sum to 100"
-        );
-        _bidShares[tokenId] = bidShares;
-        //emit BidShareUpdated(tokenId, bidShares);
+        registeredContracts[contractAddress] = true;
     }
 
     /**
@@ -186,6 +133,8 @@ contract Market is IMarket {
     function setAsk(address contractAddress, uint256 tokenId, Ask memory ask)
         public
         override
+        onlyRegistered(contractAddress)
+        ownsToken(contractAddress, tokenId)
     {
         require(
             isValidBid(contractAddress, tokenId, ask.amount),
@@ -199,7 +148,12 @@ contract Market is IMarket {
     /**
      * @notice removes an ask for a token and emits an AskRemoved event
      */
-    function removeAsk(address contractAddress, uint256 tokenId) external override onlyMediaCaller {
+    function removeAsk(address contractAddress, uint256 tokenId) 
+        external 
+        override 
+        onlyRegistered(contractAddress)
+        ownsToken(contractAddress, tokenId)
+    {
         emit AskRemoved(contractAddress, tokenId, _tokenAsks[contractAddress][tokenId]);
         delete _tokenAsks[contractAddress][tokenId];
     }
@@ -214,7 +168,11 @@ contract Market is IMarket {
         uint256 tokenId,
         Bid memory bid,
         address spender
-    ) public override onlyMediaCaller {
+    ) 
+        public 
+        override
+        onlyRegistered(contractAddress)
+    {
         //BidShares memory bidShares = _bidShares[tokenId];
         // TODO replace with valid royalty split according to ledger
         /*require(
@@ -277,7 +235,7 @@ contract Market is IMarket {
     function removeBid(address contractAddress, uint256 tokenId, address bidder)
         public
         override
-        onlyMediaCaller
+        onlyRegistered(contractAddress)
     {
         Bid storage bid = _tokenBidders[contractAddress][tokenId][bidder];
         uint256 bidAmount = bid.amount;
@@ -304,6 +262,8 @@ contract Market is IMarket {
     function acceptBid(address contractAddress, uint256 tokenId, Bid calldata expectedBid)
         external
         override
+        onlyRegistered(contractAddress)
+        ownsToken(contractAddress, tokenId)
     {
         Bid memory bid = _tokenBidders[contractAddress][tokenId][expectedBid.bidder];
         require(bid.amount > 0, "Market: cannot accept bid of 0");
