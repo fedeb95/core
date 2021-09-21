@@ -8,8 +8,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./IRoyaltyLedger.sol";
 
 /**
- * @title A Market for pieces of media
- * @notice This contract contains all of the market logic for Media
+ * @title A royalty ledger for ERC721 tokens.
+ * @notice This contract contains all of the royalties logic. An enlisted royalty provider must implement EIP-2981
  */
 contract RoyaltyLedger is IRoyaltyLedger {
 

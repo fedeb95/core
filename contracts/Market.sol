@@ -12,8 +12,8 @@ import "./Decimal.sol";
 import "./IMarket.sol";
 
 /**
- * @title A Market for pieces of media
- * @notice This contract contains all of the market logic for Media
+ * @title A Market for ERC721 tokens
+ * @notice This contract contains all of the market logic
  */
 contract Market is IMarket {
     using SafeMath for uint256;
