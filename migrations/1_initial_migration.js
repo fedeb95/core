@@ -1,7 +1,8 @@
-const RoylatyLedger = artifacts.require("RoyaltyLedger");
+const RoyaltyLedger = artifacts.require("RoyaltyLedger");
 const Market = artifacts.require("Market");
 
-module.exports = function (deployer) {
-  const ledgerContract = await deployer.deploy(RoyaltyLedger);
-  deployer.deploy(Market, ledgerContract.address);
+module.exports = async function (deployer) {
+  await deployer.deploy(RoyaltyLedger);
+  const ledgerContract = await RoyaltyLedger.deployed();
+  await deployer.deploy(Market, ledgerContract.address);
 };
