@@ -11,5 +11,7 @@ interface IRoyaltyLedger {
 
     function delist(address tokenContract) external;
 
+    function enlisted(address tokenContract) external view returns(bool);
+
     function royaltyInfo(address tokenContract, uint256 tokenId, uint256 salePrice) external view returns (address receiver, uint256 royaltyAmount);
 }

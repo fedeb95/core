@@ -10,6 +10,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./Decimal.sol";
 import "./IMarket.sol";
+import "./IRoyaltyLedger.sol";
 
 /**
  * @title A Market for ERC721 tokens
@@ -26,6 +27,12 @@ contract Market is IMarket {
 
     // Mapping from token to the current ask for the token
     mapping(address => mapping(uint256 => Ask)) private _tokenAsks;
+
+    address public royaltyLedgerAddress;
+
+    constructor (address _royaltyLedgerAddress) {
+        royaltyLedgerAddress = _royaltyLedgerAddress;
+    }
 
     /* *********
      * Modifiers
@@ -53,6 +60,7 @@ contract Market is IMarket {
      * View Functions
      * ****************
      */
+
     function bidForTokenBidder(address contractAddress, uint256 tokenId, address bidder)
         external
         view
@@ -86,22 +94,16 @@ contract Market is IMarket {
         onlyRegistered(contractAddress)
         returns (bool)
     {
-        // TODO replace with royalties!
-/*
-        BidShares memory bidShares = bidSharesForToken(tokenId);
-        require(
-            isValidBidShares(bidShares),
-            "Market: Invalid bid shares for token"
-        );
-*/
+        IRoyaltyLedger royaltyLedger = IRoyaltyLedger(royaltyLedgerAddress);
+        bool enlisted = royaltyLedger.enlisted(contractAddress);
+        if(enlisted){
+            (address receiver, uint256 royaltyAmount) = royaltyLedger.royaltyInfo(contractAddress, tokenId, bidAmount);
+            return (receiver == address(0) && royaltyAmount == 0) || 
+                    (receiver != address(0) &&
+                        bidAmount.sub(royaltyAmount) > 0 && 
+                        bidAmount.sub(royaltyAmount) <= bidAmount);
+        }
         return true;
-/*
-            bidAmount != 0 &&
-            (bidAmount ==
-                splitShare(bidShares.creator, bidAmount)
-                    .add(splitShare(bidShares.prevOwner, bidAmount))
-                    .add(splitShare(bidShares.owner, bidAmount)));
-*/
     }
 
     /* ****************

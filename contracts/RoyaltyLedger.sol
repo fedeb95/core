@@ -35,7 +35,16 @@ contract RoyaltyLedger is IRoyaltyLedger {
         delete _ledger[tokenContract];
     }
 
-    function royaltyInfo(address tokenContract, uint256 tokenId, uint256 salePrice) external view override returns (address receiver, uint256 royaltyAmount){
+    function enlisted(address tokenContract) external view override returns(bool){
+        return _ledger[tokenContract] != address(0);
+    }
+
+    function royaltyInfo(address tokenContract, uint256 tokenId, uint256 salePrice) 
+    external 
+    view 
+    override 
+    onlyEnlisted(tokenContract)
+    returns (address receiver, uint256 royaltyAmount){
        return IERC2981(_ledger[tokenContract]).royaltyInfo(tokenId, salePrice);
     }
 
