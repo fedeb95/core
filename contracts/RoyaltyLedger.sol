@@ -13,7 +13,13 @@ import "./IRoyaltyLedger.sol";
  */
 contract RoyaltyLedger is IRoyaltyLedger {
 
+    struct Royalty{
+        address receiver;
+        uint256 percentage;
+    }
+
     mapping(address => address) private _ledger;
+    mapping(address => mapping(uint256 => Royalty)) public royalties;
 
     modifier onlyEnlisted(address contractAddress){
         require(_ledger[contractAddress] != address(0), "Royalties not enlisted for contract!");
@@ -35,16 +41,28 @@ contract RoyaltyLedger is IRoyaltyLedger {
         delete _ledger[tokenContract];
     }
 
-    function enlisted(address tokenContract) external view override returns(bool){
+    function enlisted(address tokenContract) public view override returns(bool){
         return _ledger[tokenContract] != address(0);
+    }
+
+    function setRoyaltyInfo(address tokenContract, uint256 tokenId, address receiver, uint256 percentage) external ownsContract(tokenContract) {
+        Royalty memory r;
+        r.receiver = receiver;
+        r.percentage = percentage; 
+        royalties[tokenContract][tokenId] = r;
     }
 
     function royaltyInfo(address tokenContract, uint256 tokenId, uint256 salePrice) 
     external 
     view 
     override 
-    onlyEnlisted(tokenContract)
-    returns (address receiver, uint256 royaltyAmount){
+    returns (address, uint256){
+        if(!enlisted(tokenContract)){
+            Royalty memory royalty = royalties[tokenContract][tokenId]; 
+            require(royalty.receiver != address(0) && royalty.percentage >= 0 &&
+                royalty.percentage <= 100);
+            return (royalty.receiver, salePrice * royalty.percentage / 100); //TODO better math!
+        }
        return IERC2981(_ledger[tokenContract]).royaltyInfo(tokenId, salePrice);
     }
 
