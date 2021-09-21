@@ -134,7 +134,7 @@ contract Market is IMarket {
     {
         require(
             isValidBid(contractAddress, tokenId, ask.amount),
-            "Market: Ask invalid for share splitting"
+            "Market: Ask invalid"
         );
 
         _tokenAsks[contractAddress][tokenId] = ask;
@@ -169,14 +169,7 @@ contract Market is IMarket {
         override
         onlyRegistered(contractAddress)
     {
-        //BidShares memory bidShares = _bidShares[tokenId];
-        // TODO replace with valid royalty split according to ledger
-        /*require(
-            bidShares.creator.value.add(bid.sellOnShare.value) <=
-                uint256(100).mul(Decimal.BASE),
-            "Market: Sell on fee invalid for share splitting"
-        );
-        */
+        require(isValidBid(contractAddress, tokenId, bid.amount));
         require(bid.bidder != address(0), "Market: bidder cannot be 0 address");
         require(bid.amount != 0, "Market: cannot bid amount of 0");
         require(
@@ -207,8 +200,7 @@ contract Market is IMarket {
             afterBalance.sub(beforeBalance),
             bid.currency,
             bid.bidder,
-            bid.recipient,
-            bid.sellOnShare
+            bid.recipient
         );
         emit BidCreated(contractAddress, tokenId, bid);
 
@@ -266,13 +258,12 @@ contract Market is IMarket {
         require(
             bid.amount == expectedBid.amount &&
                 bid.currency == expectedBid.currency &&
-                bid.sellOnShare.value == expectedBid.sellOnShare.value &&
                 bid.recipient == expectedBid.recipient,
             "Market: Unexpected bid found."
         );
         require(
             isValidBid(contractAddress, tokenId, bid.amount),
-            "Market: Bid invalid for share splitting"
+            "Market: Bid invalid"
         );
 
         _finalizeNFTTransfer(contractAddress, tokenId, bid.bidder);
@@ -285,32 +276,28 @@ contract Market is IMarket {
      */
     function _finalizeNFTTransfer(address contractAddress, uint256 tokenId, address bidder) private {
         Bid memory bid = _tokenBidders[contractAddress][tokenId][bidder];
-        // TODO replace with call to RoyaltyLedger BidShares storage bidShares = _bidShares[contractAddress][tokenId];
+        IRoyaltyLedger royaltyLedger = IRoyaltyLedger(royaltyLedgerAddress);
+        (address royaltyReceiver, uint256 royaltyAmount) = royaltyLedger.royaltyInfo(contractAddress, tokenId, bid.amount);
 
         IERC20 token = IERC20(bid.currency);
 
-        // Transfer bid share to owner of media
         token.safeTransfer(
             IERC721(contractAddress).ownerOf(tokenId),
-            bid.amount // TODO replace with roylaties calc splitShare(bidShares.owner, bid.amount)
+            bid.amount.sub(royaltyAmount) 
         );
 
-        // TODO change with royalties, Media creator with owner of contract
-        // Transfer bid share to creator of media
-        //token.safeTransfer(
-        //    Media(mediaContract).tokenCreators(tokenId),
-        //    splitShare(bidShares.creator, bid.amount)
-        // );
+        token.safeTransfer(
+            royaltyReceiver,
+            royaltyAmount
+        );
 
         // Transfer media to bid recipient
         IERC721 nftContract = IERC721(contractAddress);
-        //previousTokenOwners[tokenId] = nftContract.ownerOf(tokenId);
         nftContract.safeTransferFrom(nftContract.ownerOf(tokenId), bid.recipient, tokenId);
 
         // Remove the accepted bid
         delete _tokenBidders[contractAddress][tokenId][bidder];
 
-        //emit BidShareUpdated(tokenId, bidShares);
         emit BidFinalized(contractAddress, tokenId, bid);
     }
 }
