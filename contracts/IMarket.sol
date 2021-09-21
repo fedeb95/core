@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.0;
 
-import "../Decimal.sol";
+import "./Decimal.sol";
 
 /**
  * @title Interface for Zora Protocol's Market

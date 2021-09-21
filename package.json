@@ -22,5 +22,10 @@
   "homepage": "https://github.com/fedeb95/core#readme",
   "dependencies": {
     "@openzeppelin/contracts": "^4.3.2"
+  },
+  "devDependencies": {
+    "dotenv": "^10.0.0",
+    "truffle-flattener": "github:fedeb95/truffle-flattener",
+    "truffle-privatekey-provider": "^1.5.0"
   }
 }
