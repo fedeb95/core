@@ -16,7 +16,7 @@ module.exports = {
       network_id: '*',
     },
     rinkeby: {
-        provider: () => new PrivateKeyProvider(process.env.PKEY, process.env.RPC_URL),
+        provider: () => new PrivateKeyProvider(process.env.RINKEBY_PKEY, process.env.RINKEBY_RPC_URL),
         network_id: 4,
         networkCheckTimeout: 1000000000,
         timeoutBlocks: 9000,
