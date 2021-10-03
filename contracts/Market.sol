@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.0;
 
+import "@manifoldxyz/royalty-registry-solidity/contracts/IRoyaltyEngineV1.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
@@ -10,7 +11,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./Decimal.sol";
 import "./IMarket.sol";
-import "./IRoyaltyLedger.sol";
 
 /**
  * @title A Market for ERC721 tokens
@@ -89,21 +89,21 @@ contract Market is IMarket {
      */
     function isValidBid(address contractAddress, uint256 tokenId, uint256 bidAmount)
         public
-        view
         override
         onlyRegistered(contractAddress)
         returns (bool)
     {
-        IRoyaltyLedger royaltyLedger = IRoyaltyLedger(royaltyLedgerAddress);
-        bool enlisted = royaltyLedger.enlisted(contractAddress);
-        if(enlisted){
-            (address receiver, uint256 royaltyAmount) = royaltyLedger.royaltyInfo(contractAddress, tokenId, bidAmount);
-            return (receiver == address(0) && royaltyAmount == 0) || 
-                    (receiver != address(0) &&
-                        bidAmount.sub(royaltyAmount) > 0 && 
-                        bidAmount.sub(royaltyAmount) <= bidAmount);
+        IRoyaltyEngineV1 royaltyLedger = IRoyaltyEngineV1(royaltyLedgerAddress);
+        (address payable[] memory recipients, uint256[] memory amounts) = royaltyLedger.getRoyaltyView(contractAddress, tokenId, bidAmount);
+        uint256 totalAmount = 0;
+        bool addressOk = true;
+        for (uint256 i = 0; i < recipients.length; i++){
+            totalAmount += amounts[i];
+            addressOk = addressOk && recipients[i] != address(0);
         }
-        return true;
+        return (addressOk && 
+                bidAmount.sub(totalAmount) > 0 && 
+                bidAmount.sub(totalAmount) <= bidAmount);
     }
 
     /* ****************
@@ -276,21 +276,26 @@ contract Market is IMarket {
      */
     function _finalizeNFTTransfer(address contractAddress, uint256 tokenId, address bidder) private {
         Bid memory bid = _tokenBidders[contractAddress][tokenId][bidder];
-        IRoyaltyLedger royaltyLedger = IRoyaltyLedger(royaltyLedgerAddress);
-        (address royaltyReceiver, uint256 royaltyAmount) = royaltyLedger.royaltyInfo(contractAddress, tokenId, bid.amount);
+        IRoyaltyEngineV1 royaltyLedger = IRoyaltyEngineV1(royaltyLedgerAddress);
+        (address payable[] memory rRecipients, uint256[] memory rAmounts) = royaltyLedger.getRoyalty(contractAddress, tokenId, bid.amount);
 
         IERC20 token = IERC20(bid.currency);
+
+        uint256 royaltyAmount = 0;
+        for (uint256 i = 0; i < rRecipients.length; i++){
+            royaltyAmount += rAmounts[i]; 
+            token.safeTransfer(
+                rRecipients[i],
+                rAmounts[i]
+             );
+        }
 
         token.safeTransfer(
             IERC721(contractAddress).ownerOf(tokenId),
             bid.amount.sub(royaltyAmount) 
         );
 
-        token.safeTransfer(
-            royaltyReceiver,
-            royaltyAmount
-        );
-
+        
         // Transfer media to bid recipient
         IERC721 nftContract = IERC721(contractAddress);
         nftContract.safeTransferFrom(nftContract.ownerOf(tokenId), bid.recipient, tokenId);

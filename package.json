@@ -21,6 +21,7 @@
   },
   "homepage": "https://github.com/fedeb95/core#readme",
   "dependencies": {
+    "@manifoldxyz/royalty-registry-solidity": "git+https://github.com/fedeb95/royalty-registry-solidity.git",
     "@openzeppelin/contracts": "^4.3.2"
   },
   "devDependencies": {
